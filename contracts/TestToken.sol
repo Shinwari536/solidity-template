@@ -6,13 +6,11 @@
 
 pragma solidity 0.4.23;
 
-import "openzeppelin-solidity/contracts/token/ERC20/StandardToken.sol";
-
 /**
   * @title TestToken
   * @author Project BlueOcean Developers
   */
-contract TestToken is StandardToken {
+contract TestToken {
 
     uint constant public decimals     = 18;
     string constant public name       = "Test Token";
