@@ -8,3 +8,6 @@ typechain
 cache
 data
 artifacts
+
+# Rough Work Testing files
+wallet.js

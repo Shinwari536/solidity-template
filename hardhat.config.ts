@@ -114,19 +114,6 @@ const config: HardhatUserConfig = {
       ...sharedNetworkConfig,
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_KEY}`,
     },
-    rinkeby: {
-      ...sharedNetworkConfig,
-      url: `https://rinkeby.infura.io/v3/${process.env.INFURA_KEY}`,
-      chainId: 4,
-    },
-    ropsten: {
-      ...sharedNetworkConfig,
-      url: `https://ropsten.infura.io/v3/${process.env.INFURA_KEY}`,
-    },
-    kovan: {
-      ...sharedNetworkConfig,
-      url: `https://kovan.infura.io/v3/${process.env.INFURA_KEY}`,
-    },
     xdai: {
       ...sharedNetworkConfig,
       url: "https://xdai.1hive.org",

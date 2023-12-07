@@ -2,8 +2,6 @@ import { expect } from "chai";
 import { Contract, BigNumber, Signer } from "ethers";
 import hre, { ethers } from "hardhat";
 
-import { getTime, hashOrder, hashToSign, Identities, makeOrder, matchOrder } from "../utils/utilities";
-
 describe("Test Token", function () {
 
   let signers: Signer[];
@@ -26,7 +24,7 @@ describe("Test Token", function () {
 
 
   it("should allow simple array replacement", async function () {
-    expect(await testTokenInstance.callStatic.balanceOf(await signers.getAddress())).to.be.equal("0x00")
+    expect(await testTokenInstance.callStatic.balanceOf(await signers[0].getAddress())).to.be.equal("0x00")
   })
 
 
