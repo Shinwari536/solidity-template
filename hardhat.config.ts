@@ -177,7 +177,7 @@ const config: HardhatUserConfig = {
           params: {
             noCompile: true,
             testFiles: [
-              "./test/src/token.spec.ts",
+              "./test/src/staking.test.ts",
             ]
           }
         }],

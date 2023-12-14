@@ -6,13 +6,14 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./lib/Constants.sol";
 import "./interface/IStaking.sol";
+import "hardhat/console.sol";
 
-contract StakingContract is Ownable, Constants {
+contract StakingContract is Constants {
     using SafeERC20 for IERC20;
 
     IERC20 public ASR; // The token users will stake
     IERC20 public rewardToken; // The token used to reward stakers
-    string public constant ADMIN_REFERRAL_CODE = "ADMIN_REFERRAL_CODE";
+    string public constant ADMIN_REFERRAL_CODE = "ASR_001324";
     address public constant ADMIN_REFERRAL_ADDRESS =
         0xee984A50654F2F43640D7ccD225F0e8a58FA15E5;
 
@@ -37,7 +38,7 @@ contract StakingContract is Ownable, Constants {
     //     address  to referral code
     mapping(address => string) public userReferralCode;
     //   referral code to referred users addresses
-    mapping(string => address[]) public referredUsers;
+    mapping(string => address[]) referredUsers;
 
     event Staked(
         address indexed userAddress,
@@ -53,13 +54,19 @@ contract StakingContract is Ownable, Constants {
         userReferralCode[ADMIN_REFERRAL_ADDRESS] = ADMIN_REFERRAL_CODE;
     }
 
-    function stakeASR(
+    function getReferredUsers(
+        string memory _referralCode
+    ) public view returns (address[] memory) {
+        return referredUsers[_referralCode];
+    }
+
+    function stake(
         uint256 amount,
         string memory _referralCode,
         address _referrerAddress
     ) external {
         require(amount >= 100, "Amount must be greater than 100");
-        require(!isStringEmpty(_referralCode), "Referral code cannot be empty");
+        // require(!isStringEmpty(_referralCode), "Referral code cannot be empty");
         // require(referrerAddress != address(0), "Add a valid referrer address.");
         Plan memory existingPlan = userStakings[msg.sender];
         require(
@@ -111,24 +118,38 @@ contract StakingContract is Ownable, Constants {
             userStakings[msg.sender] = userPlan;
         }
 
-        // calculateReward(msg.sender);
-
         ASR.safeTransferFrom(msg.sender, address(this), amount);
         totalStaked += amount;
         userReferralCode[msg.sender] = _referralCode;
 
-        if (_referrerAddress != address(0)) {
+        if (_referrerAddress != address(0) && isStringEmpty(_referralCode)) {
             _referrerAddress = ADMIN_REFERRAL_ADDRESS;
+            // _referralCode = ADMIN_REFERRAL_CODE;
         }
+
         // Referrer
         string memory referrerCode = userReferralCode[_referrerAddress];
+        if (isStringEmpty(referrerCode)) {
+            console.log("I am here");
+            userReferralCode[_referrerAddress] = _referralCode;
+        }
 
+        console.log("Referrer addr: ", _referrerAddress);
+        console.log("Referral code: ", referrerCode);
         if (
+            userStakings[_referrerAddress].levels == 0 ||
             userStakings[_referrerAddress].levels <
             referredUsers[referrerCode].length
         ) {
             referredUsers[referrerCode].push(msg.sender);
         }
+
+        // transfer the certain pertage to referrer
+        uint256 referrerReward = getPercentageForLevel(
+            getLevelPercentage(amount),
+            amount
+        );
+        rewardToken.safeTransfer(_referrerAddress, referrerReward);
 
         emit Staked(msg.sender, amount, _referrerAddress);
     }
@@ -280,9 +301,9 @@ contract StakingContract is Ownable, Constants {
 
     function getPercentageForLevel(
         uint256 rewardPerc,
-        uint256 referredUserReward
+        uint256 totalAmount
     ) internal pure returns (uint256) {
-        return (rewardPerc * referredUserReward) / 100;
+        return (rewardPerc * totalAmount) / 100;
     }
 
     function isStringEmpty(string memory str) public pure returns (bool) {
