@@ -3,19 +3,17 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "./lib/Constants.sol";
-import "./interface/IStaking.sol";
+import "./CustomErrors.sol";
 import "hardhat/console.sol";
 
-contract StakingContract is Constants {
+contract StakingContract is CustomErrors {
     using SafeERC20 for IERC20;
 
     IERC20 public ASR; // The token users will stake
     IERC20 public rewardToken; // The token used to reward stakers
     string public constant ADMIN_REFERRAL_CODE = "ASR_001324";
     address public constant ADMIN_REFERRAL_ADDRESS =
-        0xee984A50654F2F43640D7ccD225F0e8a58FA15E5;
+        address(0xee984A50654F2F43640D7ccD225F0e8a58FA15E5);
 
     enum PlanName {
         BASIC,
@@ -38,7 +36,7 @@ contract StakingContract is Constants {
     //     address  to referral code
     mapping(address => string) public userReferralCode;
     //   referral code to referred users addresses
-    mapping(string => address[]) referredUsers;
+    mapping(string => address[]) public referredUsers;
 
     event Staked(
         address indexed userAddress,
@@ -61,25 +59,23 @@ contract StakingContract is Constants {
     }
 
     function stake(
-        uint256 amount,
+        uint256 _amount,
         string memory _referralCode,
         address _referrerAddress
     ) external {
-        require(amount >= 100, "Amount must be greater than 100");
-        // require(!isStringEmpty(_referralCode), "Referral code cannot be empty");
-        // require(referrerAddress != address(0), "Add a valid referrer address.");
-        Plan memory existingPlan = userStakings[msg.sender];
-        require(
-            existingPlan.stakedAmount == 0 && existingPlan.levels == 0,
-            "Plan already exists."
-        );
+        if (_amount < 100) revert LowAmountToStake();
 
-        PlanName plan = identifyPlan(amount);
+        Plan memory existingPlan = userStakings[msg.sender];
+        if (existingPlan.stakedAmount != 0 && existingPlan.levels != 0)
+            revert StakingAlreadyExists();
+
+        PlanName plan = identifyPlan(_amount);
+        console.log("amount: ", _amount);
 
         if (plan == PlanName.BASIC) {
             Plan memory userPlan = Plan(
                 plan,
-                amount,
+                _amount,
                 56,
                 block.timestamp,
                 12 * 30 days,
@@ -89,7 +85,7 @@ contract StakingContract is Constants {
         } else if (plan == PlanName.SILVER) {
             Plan memory userPlan = Plan(
                 plan,
-                amount,
+                _amount,
                 60,
                 block.timestamp,
                 14 * 30 days,
@@ -99,7 +95,7 @@ contract StakingContract is Constants {
         } else if (plan == PlanName.GOLD) {
             Plan memory userPlan = Plan(
                 plan,
-                amount,
+                _amount,
                 64,
                 block.timestamp,
                 16 * 30 days,
@@ -109,7 +105,7 @@ contract StakingContract is Constants {
         } else if (plan == PlanName.PLATINUM) {
             Plan memory userPlan = Plan(
                 plan,
-                amount,
+                _amount,
                 67,
                 block.timestamp,
                 18 * 30 days,
@@ -118,40 +114,13 @@ contract StakingContract is Constants {
             userStakings[msg.sender] = userPlan;
         }
 
-        ASR.safeTransferFrom(msg.sender, address(this), amount);
-        totalStaked += amount;
-        userReferralCode[msg.sender] = _referralCode;
+        ASR.safeTransferFrom(msg.sender, address(this), _amount);
+        totalStaked += _amount;
 
-        if (_referrerAddress != address(0) && isStringEmpty(_referralCode)) {
-            _referrerAddress = ADMIN_REFERRAL_ADDRESS;
-            // _referralCode = ADMIN_REFERRAL_CODE;
-        }
+        // Handle referrer and it's code
+        handleReference(_amount, _referralCode, _referrerAddress);
 
-        // Referrer
-        string memory referrerCode = userReferralCode[_referrerAddress];
-        if (isStringEmpty(referrerCode)) {
-            console.log("I am here");
-            userReferralCode[_referrerAddress] = _referralCode;
-        }
-
-        console.log("Referrer addr: ", _referrerAddress);
-        console.log("Referral code: ", referrerCode);
-        if (
-            userStakings[_referrerAddress].levels == 0 ||
-            userStakings[_referrerAddress].levels <
-            referredUsers[referrerCode].length
-        ) {
-            referredUsers[referrerCode].push(msg.sender);
-        }
-
-        // transfer the certain pertage to referrer
-        uint256 referrerReward = getPercentageForLevel(
-            getLevelPercentage(amount),
-            amount
-        );
-        rewardToken.safeTransfer(_referrerAddress, referrerReward);
-
-        emit Staked(msg.sender, amount, _referrerAddress);
+        emit Staked(msg.sender, _amount, _referrerAddress);
     }
 
     function updateStaking(uint256 amount) external {
@@ -220,10 +189,10 @@ contract StakingContract is Constants {
     function identifyPlan(
         uint256 amount
     ) internal pure returns (PlanName planName) {
-        if (amount >= 100 && amount <= 1000) return PlanName.BASIC;
-        else if (amount > 1000 && amount <= 5000) return PlanName.SILVER;
-        else if (amount > 5000 && amount <= 20000) return PlanName.GOLD;
-        else if (amount > 20000 && amount <= 50000) return PlanName.PLATINUM;
+        if (amount >= 100 ether && amount <= 1000 ether) return PlanName.BASIC;
+        else if (amount > 1000 ether && amount <= 5000 ether) return PlanName.SILVER;
+        else if (amount > 5000 ether && amount <= 20000 ether) return PlanName.GOLD;
+        else if (amount > 20000 ether && amount <= 50000 ether) return PlanName.PLATINUM;
     }
 
     function getDailyReward(address _address) public view returns (uint256) {
@@ -278,6 +247,38 @@ contract StakingContract is Constants {
     }
 
     // *********************************** Internal Functions ***********************************
+
+    function handleReference(
+        uint256 _amount,
+        string memory _referralCode,
+        address _referrerAddress
+    ) internal {
+        if (_referrerAddress == address(0) && isStringEmpty(_referralCode)) {
+            _referralCode = ADMIN_REFERRAL_CODE;
+            _referrerAddress = ADMIN_REFERRAL_ADDRESS;
+        }
+        // Check for the existing referral code and referrer
+        string memory referrerCode = userReferralCode[_referrerAddress];
+        if (isStringEmpty(referrerCode)) {
+            userReferralCode[_referrerAddress] = _referralCode;
+            referrerCode = _referralCode;
+        }
+
+        if (
+            userStakings[_referrerAddress].levels == 0 ||
+            referredUsers[referrerCode].length <
+            userStakings[_referrerAddress].levels
+        ) {
+            referredUsers[referrerCode].push(msg.sender);
+        }
+
+        // Add the referrer reward based on the level
+        uint256 referrerReward = getPercentageForLevel(
+            getLevelPercentage(referredUsers[referrerCode].length - 1),
+            _amount
+        );
+        rewards[_referrerAddress] += referrerReward;
+    }
 
     function getLevelPercentage(
         uint256 _level

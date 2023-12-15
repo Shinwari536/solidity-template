@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-
-import "../lib/Constants.sol";
-import "../lib/CustomErrors.sol";
-
-interface IStaking is CustomErrors {
+interface IStaking {
     function stakeASR(uint256 amount) external;
 
     function unstake(uint256 amount) external;

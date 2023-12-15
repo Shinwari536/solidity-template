@@ -15,6 +15,7 @@ export async function increaseTime(duration: number): Promise<void> {
 }
 
 export const referralCodes = {
+    adminRef: "ASR_001324",
     addr1Ref: "ADDR_001",
     addr2Ref: "ADDR_002",
     addr3Ref: "ADDR_003",
