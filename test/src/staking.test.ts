@@ -2,19 +2,14 @@ import { expect } from "chai";
 import { Contract, BigNumber, Signer } from "ethers";
 import hre, { ethers } from "hardhat";
 import { parseEther } from "ethers/lib/utils";
-import asr_abi from "../utils/asr-abi.json";
-function increaseTime(duration: number) {
-  ethers.provider.send("evm_increaseTime", [duration]);
-  ethers.provider.send("evm_mine", []);
-}
 
 function toReadableAmount(rawAmount: number) {
-  return ethers.utils.formatUnits(rawAmount, 18).slice(0, 4);
+  return ethers.utils.formatUnits(rawAmount, 18);
 }
 const ADMIN_REFERRAL_ADDRESS = "0xee984a50654f2f43640d7ccd225f0e8a58fa15e5";
 const ADMIN_REFERRAL_CODE = "ASR_001324";
 
-import { referralCodes } from "../utils/utilities";
+import { increaseTime, referralCodes } from "../utils/utilities";
 describe("ASR Staking Smart Contract", function () {
   // address
   let owner: Signer;
@@ -25,7 +20,7 @@ describe("ASR Staking Smart Contract", function () {
   let addr5: Signer;
   let addr6: Signer;
   let addr7: Signer;
-  let addr8: Signer;
+  let noStakingAddr: Signer;
   let addr9: Signer;
   let addr10: Signer;
   let stakingInstance: Contract;
@@ -42,7 +37,7 @@ describe("ASR Staking Smart Contract", function () {
       addr5,
       addr6,
       addr7,
-      addr8,
+      noStakingAddr,
       addr9,
       addr10,
     ] = await ethers.getSigners();
@@ -66,7 +61,10 @@ describe("ASR Staking Smart Contract", function () {
       asrInstance.transfer(await addr5.getAddress(), parseEther("40000")),
       asrInstance.transfer(await addr6.getAddress(), parseEther("2000")),
       asrInstance.transfer(await addr7.getAddress(), parseEther("20000")),
-      asrInstance.transfer(await addr8.getAddress(), parseEther("1000")),
+      asrInstance.transfer(
+        await noStakingAddr.getAddress(),
+        parseEther("1000")
+      ),
       asrInstance.transfer(await addr9.getAddress(), parseEther("500")),
       asrInstance.transfer(await addr10.getAddress(), parseEther("200000")),
     ]);
@@ -94,7 +92,7 @@ describe("ASR Staking Smart Contract", function () {
         .connect(addr7)
         .approve(stakingInstance.address, parseEther("5000000")),
       asrInstance
-        .connect(addr8)
+        .connect(noStakingAddr)
         .approve(stakingInstance.address, parseEther("5000000")),
       asrInstance
         .connect(addr9)
@@ -139,7 +137,7 @@ describe("ASR Staking Smart Contract", function () {
 
       console.log(
         "Admin award: ",
-        toReadableAmount(await stakingInstance.rewards(ADMIN_REFERRAL_ADDRESS))
+        toReadableAmount(await stakingInstance.getReward(ADMIN_REFERRAL_ADDRESS))
       );
     });
 
@@ -151,7 +149,7 @@ describe("ASR Staking Smart Contract", function () {
           referralCodes.addr3Ref,
           await addr3.getAddress()
         );
-      
+
       console.log(
         "addr3 referred Users: ",
         await stakingInstance.getReferredUsers(referralCodes.addr3Ref)
@@ -160,7 +158,7 @@ describe("ASR Staking Smart Contract", function () {
       console.log(
         "addr3 award: ",
         toReadableAmount(
-          await stakingInstance.rewards(await addr3.getAddress())
+          await stakingInstance.getReward(await addr3.getAddress())
         )
       );
       const plan = await stakingInstance.userStakings(await addr4.getAddress());
@@ -176,7 +174,7 @@ describe("ASR Staking Smart Contract", function () {
           referralCodes.addr3Ref,
           await addr3.getAddress()
         );
-      
+
       console.log(
         "addr3 referred Users: ",
         await stakingInstance.getReferredUsers(referralCodes.addr3Ref)
@@ -185,12 +183,115 @@ describe("ASR Staking Smart Contract", function () {
       console.log(
         "addr3 award: ",
         toReadableAmount(
-          await stakingInstance.rewards(await addr3.getAddress())
+          await stakingInstance.getReward(await addr3.getAddress())
         )
       );
       const plan = await stakingInstance.userStakings(await addr5.getAddress());
-      console.log("Plan: ", plan.planName);
-      expect(plan.planName).to.be.equal(2); // 0 = BASIC Plan
+      expect(plan.planName).to.be.equal(2); // 2 = GOLD Plan
+    });
+
+    it("Should not allow staking another amount if already exist", async function () {
+      await expect(
+        stakingInstance
+          .connect(addr5)
+          .stake(
+            parseEther("15000"),
+            referralCodes.addr3Ref,
+            await addr3.getAddress()
+          )
+      ).to.be.revertedWith("StakingAlreadyExists");
+    });
+
+    it("Should not allow staking less than 100 ASR amount", async function () {
+      await expect(
+        stakingInstance
+          .connect(addr9)
+          .stake(
+            parseEther("99"),
+            referralCodes.addr3Ref,
+            await addr3.getAddress()
+          )
+      ).to.be.revertedWith("LowAmountToStake");
+    });
+  });
+
+  describe("Update Staking", function () {
+    it("Should not allow update if no staking found", async function () {
+      await expect(
+        stakingInstance
+          .connect(noStakingAddr)
+          .updateStaking(parseEther("14688"))
+      ).to.be.revertedWith("NoStakingExists");
+    });
+
+    it("Should allow update staking if user has staked ASR before", async function () {
+      const planBefore = await stakingInstance.userStakings(
+        await addr10.getAddress()
+      );
+
+      console.log(
+        "Addr10 award before: ",
+        toReadableAmount(
+          await stakingInstance.getReward(await addr10.getAddress())
+        ), planBefore.dailyReward
+      );
+      await increaseTime(86400); // 1 day
+
+      await stakingInstance.connect(addr10).updateStaking(parseEther("10000"));
+      await increaseTime(86400); // 1 day
+      const planAfter = await stakingInstance.userStakings(
+        await addr10.getAddress()
+      );
+      console.log(
+        "Addr10 award after: ",
+        toReadableAmount(
+          await stakingInstance.getReward(await addr10.getAddress())
+        ), planAfter.dailyReward
+      );
+      expect(planAfter.stakedAmount).to.be.equal(
+        planBefore.stakedAmount.add(parseEther("10000"))
+      );
+    });
+  });
+
+  describe("Uns-take ASR ", function () {
+    it("Should not allow un-stake ASR if no plan/staking exist", async function () {
+      await expect(
+        stakingInstance.connect(noStakingAddr).unstake()
+      ).to.be.revertedWith("NoStakingExists");
+    });
+    it("Should not allow un-stake ASR before plan duration", async function () {
+      await expect(stakingInstance.connect(addr3).unstake()).to.be.revertedWith(
+        "StakingPlanDurationsError"
+      );
+    });
+
+    it("Should allow un-stake ASR after plan duration", async function () {
+      // addr5 has staked 15000 * 10**18 ASR and bought GOLD for 16 months
+      const balanceBefore = await asrInstance.balanceOf(
+        await addr5.getAddress()
+      );
+      await stakingInstance
+        .connect(addr7)
+        .stake(
+          parseEther("1500"),
+          referralCodes.addr5Ref,
+          await addr5.getAddress()
+        );
+
+      await increaseTime(41889024); // seconds in 16 months
+      await stakingInstance.connect(addr5).unstake();
+
+      const balanceAfter = await asrInstance.balanceOf(
+        await addr5.getAddress()
+      );
+
+      console.log(
+        "Before: ",
+        toReadableAmount(balanceBefore),
+        "After: ",
+        toReadableAmount(balanceAfter)
+      );
     });
   });
 });

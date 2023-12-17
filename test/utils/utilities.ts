@@ -22,4 +22,8 @@ export const referralCodes = {
     addr4Ref: "ADDR_004",
     addr5Ref: "ADDR_005",
     addr6Ref: "ADDR_006",
+    addr7Ref: "ADDR_007",
+    addr8Ref: "ADDR_008",
+    addr9Ref: "ADDR_009",
+    addr10Ref: "ADDR_0010",
 }
